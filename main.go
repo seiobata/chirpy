@@ -18,7 +18,7 @@ func main() {
 		Handler: mux,
 		Addr:    ":" + port,
 	}
-	log.Printf("Starting server on port %s...", port)
+	log.Printf("Starting server on port %s...\n", port)
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
