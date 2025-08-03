@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"net/http"
-	"sync/atomic"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 const (
@@ -16,50 +21,59 @@ func main() {
 	mux := http.NewServeMux()
 	apiCfg := apiConfig{}
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(rootPath)))))
-	mux.HandleFunc("/healthz", handlerReadiness)
-	mux.HandleFunc("/metrics", apiCfg.handlerHitsMetrics)
-	mux.HandleFunc("/reset", apiCfg.handlerMetricsReset)
+	mux.HandleFunc("GET /api/healthz", handlerReadiness)
+	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerHitsMetrics)
+	mux.HandleFunc("POST /admin/reset", apiCfg.handlerMetricsReset)
 
 	server := http.Server{
 		Handler: mux,
 		Addr:    ":" + port,
 	}
-	log.Printf("Starting server on port %s...\n", port)
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+	go func() {
+		log.Printf("Starting server on port %s...\n", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server failed to start: %v", err)
+		}
+	}()
+
+	// channel for shutdown
+	quit := make(chan bool, 1)
+
+	go func() {
+		quitSig := make(chan os.Signal, 1)
+		signal.Notify(quitSig, os.Interrupt, syscall.SIGTERM)
+		<-quitSig
+		quit <- true
+	}()
+
+	go func() {
+		// slight delay so message prints after server starts
+		time.Sleep(50 * time.Millisecond)
+		fmt.Println("Enter 'q' to shutdown server")
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			input := scanner.Text()
+			if input == "q" {
+				quit <- true
+				return
+			}
+			fmt.Println("Enter 'q' to shutdown server")
+		}
+	}()
+
+	// wait for shutdown signal
+	<-quit
+	log.Println("Shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("Server failed to properly shutdown: %v", err)
 	}
+	log.Println("Server closed")
 }
 
 func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(http.StatusText(http.StatusOK)))
-}
-
-type apiConfig struct {
-	fileserverHits atomic.Int32
-}
-
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg.fileserverHits.Add(1)
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (cfg *apiConfig) handlerHitsMetrics(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if _, err := fmt.Fprintf(w, "Hits: %d", cfg.fileserverHits.Load()); err != nil {
-		log.Printf("Failed to write metrics response: %v", err)
-	}
-}
-
-func (cfg *apiConfig) handlerMetricsReset(w http.ResponseWriter, r *http.Request) {
-	cfg.fileserverHits.Store(0)
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte("Hits reset to 0")); err != nil {
-		log.Printf("Failed to write reset response: %v", err)
-	}
 }
