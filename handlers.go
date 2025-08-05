@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"sync/atomic"
+
+	"github.com/seiobata/chirpy/internal/database"
 )
 
 const (
@@ -52,6 +54,7 @@ func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	db             *database.Queries
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {

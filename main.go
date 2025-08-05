@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +11,10 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+	"github.com/seiobata/chirpy/internal/database"
 )
 
 const (
@@ -18,11 +23,23 @@ const (
 )
 
 func main() {
+	godotenv.Load()
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("Failed to open database: %v", err)
+	}
+	dbQueries := database.New(db)
+	apiCfg := apiConfig{
+		db: dbQueries,
+	}
+
 	mux := http.NewServeMux()
-	apiCfg := apiConfig{}
 	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(rootPath)))))
+
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
 	mux.HandleFunc("POST /api/validate_chirp", handlerValidateChirp)
+
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerHitsMetrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerMetricsReset)
 
