@@ -25,8 +25,11 @@ func helperCleanBody(body string) string {
 }
 
 func helperResponseError(w http.ResponseWriter, code int, msg string) {
+	type errorResponse struct {
+		Error string `json:"error"`
+	}
 	log.Printf("Error code %v: %s", code, msg)
-	errorMsg := paramError{
+	errorMsg := errorResponse{
 		Error: msg,
 	}
 	helperResponseJSON(w, code, errorMsg)
