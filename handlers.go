@@ -8,38 +8,12 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/seiobata/chirpy/internal/database"
 )
 
 const (
 	maxChirpLength = 140
 )
-
-func handlerValidateChirp(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		Body string `json:"body"`
-	}
-	type returnVals struct {
-		CleanBody string `json:"cleaned_body"`
-	}
-	params := parameters{}
-
-	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&params)
-	if err != nil {
-		decodeErr := fmt.Sprintf("Error decoding JSON: %v", err)
-		helperResponseError(w, http.StatusBadRequest, decodeErr)
-		return
-	}
-	if len(params.Body) > maxChirpLength {
-		lengthErr := "Chirp is too long"
-		helperResponseError(w, http.StatusBadRequest, lengthErr)
-		return
-	}
-	cleanBody := helperCleanBody(params.Body)
-	helperResponseJSON(w, http.StatusOK, returnVals{
-		CleanBody: cleanBody,
-	})
-}
 
 func handlerReadiness(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
@@ -120,5 +94,50 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 		CreatedAt: user.CreatedAt,
 		UpdatedAt: user.UpdatedAt,
 		Email:     user.Email,
+	})
+}
+
+type Chirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
+func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request) {
+	type parameters struct {
+		Body   string    `json:"body"`
+		UserID uuid.UUID `json:"user_id"`
+	}
+	params := parameters{}
+
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&params)
+	if err != nil {
+		decodeErr := fmt.Sprintf("Error decoding JSON: %v", err)
+		helperResponseError(w, http.StatusBadRequest, decodeErr)
+		return
+	}
+	if len(params.Body) > maxChirpLength {
+		lengthErr := "Chirp is too long"
+		helperResponseError(w, http.StatusBadRequest, lengthErr)
+		return
+	}
+	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
+		Body:   helperCleanBody(params.Body),
+		UserID: params.UserID,
+	})
+	if err != nil {
+		createChirpErr := fmt.Sprintf("Error creating chirp: %v", err)
+		helperResponseError(w, http.StatusInternalServerError, createChirpErr)
+		return
+	}
+	helperResponseJSON(w, http.StatusCreated, Chirp{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
 	})
 }
