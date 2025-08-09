@@ -58,8 +58,8 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 	dbChirps, err := cfg.db.GetChirps(r.Context())
 	if err != nil {
-		getChirpErr := fmt.Sprintf("Error retrieving all chirps: %v", err)
-		helperResponseError(w, http.StatusInternalServerError, getChirpErr)
+		getChirpsErr := fmt.Sprintf("Error retrieving all chirps: %v", err)
+		helperResponseError(w, http.StatusInternalServerError, getChirpsErr)
 		return
 	}
 	chirps := []Chirp{}
@@ -73,4 +73,27 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	helperResponseJSON(w, http.StatusOK, chirps)
+}
+
+func (cfg *apiConfig) handlerGetAChirp(w http.ResponseWriter, r *http.Request) {
+	chirpIDstring := r.PathValue("chirpID")
+	chirpID, err := uuid.Parse(chirpIDstring)
+	if err != nil {
+		idErr := fmt.Sprintf("Invalid ID: %v", err)
+		helperResponseError(w, http.StatusBadRequest, idErr)
+		return
+	}
+	chirp, err := cfg.db.GetAChirp(r.Context(), chirpID)
+	if err != nil {
+		getAChirpErr := fmt.Sprintf("Error retrieving chirp: %v", err)
+		helperResponseError(w, http.StatusNotFound, getAChirpErr)
+		return
+	}
+	helperResponseJSON(w, http.StatusOK, Chirp{
+		ID:        chirp.ID,
+		CreatedAt: chirp.CreatedAt,
+		UpdatedAt: chirp.UpdatedAt,
+		Body:      chirp.Body,
+		UserID:    chirp.UserID,
+	})
 }
