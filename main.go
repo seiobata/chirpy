@@ -58,6 +58,7 @@ func main() {
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.handlerGetAChirp)
 
 	mux.HandleFunc("POST /api/users", apiCfg.handlerCreateUser)
+	mux.HandleFunc("POST /api/login", apiCfg.handlerUserLogin)
 
 	mux.HandleFunc("GET /api/healthz", handlerReadiness)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerHitsMetrics)
@@ -67,6 +68,8 @@ func main() {
 		Handler: mux,
 		Addr:    ":" + port,
 	}
+
+	// start server in its own goroutine
 	go func() {
 		log.Printf("Starting server on port %s...\n", port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
