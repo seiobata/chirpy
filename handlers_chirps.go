@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/seiobata/chirpy/internal/auth"
 	"github.com/seiobata/chirpy/internal/database"
 )
 
@@ -20,26 +21,39 @@ type Chirp struct {
 
 func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 	params := parameters{}
 
+	// check token
+	invalidErr := "Invalid token"
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		helperResponseError(w, http.StatusUnauthorized, invalidErr)
+		return
+	}
+	validID, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		helperResponseError(w, http.StatusUnauthorized, invalidErr)
+		return
+	}
+
 	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		decodeErr := fmt.Sprintf("Error decoding JSON: %v", err)
 		helperResponseError(w, http.StatusBadRequest, decodeErr)
 		return
 	}
-	if len(params.Body) > maxChirpLength {
-		lengthErr := "Chirp is too long"
-		helperResponseError(w, http.StatusBadRequest, lengthErr)
-		return
+
+	validBody, err := helperValidateBody(params.Body)
+	if err != nil {
+		validateBodyErr := fmt.Sprintf("Invalid chirp: %v", err)
+		helperResponseError(w, http.StatusBadRequest, validateBodyErr)
 	}
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
-		Body:   helperCleanBody(params.Body),
-		UserID: params.UserID,
+		Body:   validBody,
+		UserID: validID,
 	})
 	if err != nil {
 		createChirpErr := fmt.Sprintf("Error creating chirp: %v", err)

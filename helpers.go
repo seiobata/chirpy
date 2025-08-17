@@ -2,12 +2,17 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
 )
 
-func helperCleanBody(body string) string {
+func helperValidateBody(body string) (string, error) {
+	if len(body) > maxChirpLength {
+		return "", errors.New("chirp is too long")
+	}
+
 	badWords := map[string]struct{}{
 		"kerfuffle": {},
 		"sharbert":  {},
@@ -21,7 +26,7 @@ func helperCleanBody(body string) string {
 		}
 	}
 	cleanWords := strings.Join(words, " ")
-	return cleanWords
+	return cleanWords, nil
 }
 
 func helperResponseError(w http.ResponseWriter, code int, msg string) {

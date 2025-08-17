@@ -57,8 +57,13 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 
 func (cfg *apiConfig) handlerUserLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email            string `json:"email"`
+		Password         string `json:"password"`
+		ExpiresInSeconds int    `json:"expires_in_seconds"`
+	}
+	type response struct {
+		User
+		Token string `json:"token"`
 	}
 	params := parameters{}
 
@@ -82,10 +87,28 @@ func (cfg *apiConfig) handlerUserLogin(w http.ResponseWriter, r *http.Request) {
 		helperResponseError(w, http.StatusUnauthorized, invalidErr)
 		return
 	}
-	helperResponseJSON(w, http.StatusOK, User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.UpdatedAt,
-		Email:     user.Email,
+
+	// set default expiration
+	expiration := time.Hour
+	if params.ExpiresInSeconds > 0 && params.ExpiresInSeconds < 3600 {
+		expiration = time.Duration(params.ExpiresInSeconds) * time.Second
+	}
+
+	// generate token
+	token, err := auth.MakeJWT(user.ID, cfg.secret, expiration)
+	if err != nil {
+		makeJWTErr := fmt.Sprintf("Error generating token: %v", err)
+		helperResponseError(w, http.StatusInternalServerError, makeJWTErr)
+		return
+	}
+
+	helperResponseJSON(w, http.StatusOK, response{
+		User: User{
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.UpdatedAt,
+			Email:     user.Email,
+		},
+		Token: token,
 	})
 }
