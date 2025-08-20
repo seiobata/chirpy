@@ -22,6 +22,10 @@ const (
 	rootPath       = "."
 	port           = "8080"
 	maxChirpLength = 140
+
+	// token expiration
+	accessTkExp  = time.Hour
+	refreshTkExp = time.Hour * 24 * 60
 )
 
 type apiConfig struct {

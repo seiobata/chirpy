@@ -57,13 +57,13 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 
 func (cfg *apiConfig) handlerUserLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Email            string `json:"email"`
-		Password         string `json:"password"`
-		ExpiresInSeconds int    `json:"expires_in_seconds"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	type response struct {
 		User
-		Token string `json:"token"`
+		AccessToken  string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
 	}
 	params := parameters{}
 
@@ -88,17 +88,31 @@ func (cfg *apiConfig) handlerUserLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// set default expiration
-	expiration := time.Hour
-	if params.ExpiresInSeconds > 0 && params.ExpiresInSeconds < 3600 {
-		expiration = time.Duration(params.ExpiresInSeconds) * time.Second
+	// generate access token
+	accessToken, err := auth.MakeJWT(user.ID, cfg.secret, accessTkExp)
+	if err != nil {
+		makeJWTErr := fmt.Sprintf("Error generating JWT token: %v", err)
+		helperResponseError(w, http.StatusInternalServerError, makeJWTErr)
+		return
 	}
 
-	// generate token
-	token, err := auth.MakeJWT(user.ID, cfg.secret, expiration)
+	// generate refresh token
+	refreshToken, err := auth.MakeRefreshToken()
 	if err != nil {
-		makeJWTErr := fmt.Sprintf("Error generating token: %v", err)
-		helperResponseError(w, http.StatusInternalServerError, makeJWTErr)
+		makeRefreshTkErr := fmt.Sprintf("Error generating refresh token: %v", err)
+		helperResponseError(w, http.StatusInternalServerError, makeRefreshTkErr)
+		return
+	}
+
+	// add refresh token to refresh_tokens database
+	_, err = cfg.db.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		UserID:    user.ID,
+		Token:     refreshToken,
+		ExpiresAt: time.Now().UTC().Add(refreshTkExp),
+	})
+	if err != nil {
+		dbRefreshTkErr := fmt.Sprintf("Error adding refresh token to database: %v", err)
+		helperResponseError(w, http.StatusInternalServerError, dbRefreshTkErr)
 		return
 	}
 
@@ -109,6 +123,7 @@ func (cfg *apiConfig) handlerUserLogin(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt: user.UpdatedAt,
 			Email:     user.Email,
 		},
-		Token: token,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 	})
 }
