@@ -55,6 +55,64 @@ func (cfg *apiConfig) handlerCreateUser(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) {
+	type parameters struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	// validate token
+	invalidErr := "Token is invalid or expired"
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		helperResponseError(w, http.StatusUnauthorized, invalidErr)
+		return
+	}
+	user, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		helperResponseError(w, http.StatusUnauthorized, invalidErr)
+		return
+	}
+
+	// decode request parameters
+	params := parameters{}
+	decoder := json.NewDecoder(r.Body)
+	err = decoder.Decode(&params)
+	if err != nil {
+		decodeErr := fmt.Sprintf("Error decoding JSON: %v", err)
+		helperResponseError(w, http.StatusInternalServerError, decodeErr)
+		return
+	}
+
+	// hash password
+	password, err := auth.HashPassword(params.Password)
+	if err != nil {
+		hashErr := fmt.Sprintf("Error hashing password: %v", err)
+		helperResponseError(w, http.StatusInternalServerError, hashErr)
+		return
+	}
+
+	// update user email and password
+	dbUser, err := cfg.db.UpdateUser(r.Context(), database.UpdateUserParams{
+		ID:             user,
+		Email:          params.Email,
+		HashedPassword: password,
+	})
+	if err != nil {
+		updateErr := fmt.Sprintf("Error updating user: %v", err)
+		helperResponseError(w, http.StatusInternalServerError, updateErr)
+		return
+	}
+
+	// request successful; returning user
+	helperResponseJSON(w, http.StatusOK, User{
+		ID:        dbUser.ID,
+		CreatedAt: dbUser.CreatedAt,
+		UpdatedAt: dbUser.UpdatedAt,
+		Email:     dbUser.Email,
+	})
+}
+
 func (cfg *apiConfig) handlerUserLogin(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Email    string `json:"email"`
