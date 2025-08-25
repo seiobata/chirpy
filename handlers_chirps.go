@@ -90,8 +90,7 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) handlerGetAChirp(w http.ResponseWriter, r *http.Request) {
-	chirpIDstring := r.PathValue("chirpID")
-	chirpID, err := uuid.Parse(chirpIDstring)
+	chirpID, err := uuid.Parse(r.PathValue("chirpID"))
 	if err != nil {
 		idErr := fmt.Sprintf("Invalid ID: %v", err)
 		helperResponseError(w, http.StatusBadRequest, idErr)
@@ -110,4 +109,50 @@ func (cfg *apiConfig) handlerGetAChirp(w http.ResponseWriter, r *http.Request) {
 		Body:      chirp.Body,
 		UserID:    chirp.UserID,
 	})
+}
+
+func (cfg *apiConfig) handlerDeleteAChirp(w http.ResponseWriter, r *http.Request) {
+	chirpID, err := uuid.Parse(r.PathValue("chirpID"))
+	if err != nil {
+		idErr := fmt.Sprintf("Invalid ID: %v", err)
+		helperResponseError(w, http.StatusBadRequest, idErr)
+		return
+	}
+
+	// validate token
+	invalidErr := "Token is invalid or expired"
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		helperResponseError(w, http.StatusUnauthorized, invalidErr)
+		return
+	}
+	user, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		helperResponseError(w, http.StatusUnauthorized, invalidErr)
+		return
+	}
+
+	chirp, err := cfg.db.GetAChirp(r.Context(), chirpID)
+	if err != nil {
+		getAChirpErr := fmt.Sprintf("Error retrieving chirp: %v", err)
+		helperResponseError(w, http.StatusNotFound, getAChirpErr)
+		return
+	}
+
+	// verify chirp owner
+	if chirp.UserID != user {
+		userErr := "User not allowed to delete chirp"
+		helperResponseError(w, http.StatusForbidden, userErr)
+		return
+	}
+
+	// delete chirp
+	err = cfg.db.DeleteAChirp(r.Context(), chirpID)
+	if err != nil {
+		deleteAChirpErr := fmt.Sprintf("Error deleting chirp: %v", err)
+		helperResponseError(w, http.StatusInternalServerError, deleteAChirpErr)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
