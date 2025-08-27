@@ -66,6 +66,7 @@ func main() {
 	mux.HandleFunc("POST /api/users", apiCfg.handlerCreateUser)
 	mux.HandleFunc("PUT /api/users", apiCfg.handlerUpdateUser)
 	mux.HandleFunc("POST /api/login", apiCfg.handlerUserLogin)
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.handlerUpgradeUserToRed)
 
 	mux.HandleFunc("POST /api/refresh", apiCfg.handlerRefreshAccessToken)
 	mux.HandleFunc("POST /api/revoke", apiCfg.handlerRevokeRefreshToken)
