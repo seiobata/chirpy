@@ -198,9 +198,21 @@ func (cfg *apiConfig) handlerUpgradeUserToRed(w http.ResponseWriter, r *http.Req
 		} `json:"data"`
 	}
 
+	// check for Polka API Key
+	apiKeyErr := "Invalid API Key"
+	apiKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		helperResponseError(w, http.StatusUnauthorized, apiKeyErr)
+		return
+	}
+	if apiKey != cfg.polkaSecret {
+		helperResponseError(w, http.StatusUnauthorized, apiKeyErr)
+		return
+	}
+
 	params := parameters{}
 	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		decodeErr := fmt.Sprintf("Error decoding JSON: %v", err)
 		helperResponseError(w, http.StatusBadRequest, decodeErr)

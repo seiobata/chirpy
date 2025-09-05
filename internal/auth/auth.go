@@ -36,3 +36,12 @@ func MakeRefreshToken() (string, error) {
 	rand.Read(token)
 	return hex.EncodeToString(token), nil
 }
+
+func GetAPIKey(headers http.Header) (string, error) {
+	header := headers.Get("Authorization")
+	apiKey, ok := strings.CutPrefix(header, "ApiKey")
+	if !ok {
+		return "", errors.New("api key missing")
+	}
+	return strings.TrimSpace(apiKey), nil
+}

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // driver for database/sql package
 	"github.com/seiobata/chirpy/internal/database"
 )
 
@@ -33,9 +33,11 @@ type apiConfig struct {
 	db             *database.Queries
 	platform       string
 	secret         string
+	polkaSecret    string
 }
 
 func main() {
+	// load environment variables
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
@@ -49,15 +51,22 @@ func main() {
 	if secret == "" {
 		log.Fatal("TOKEN_SECRET must be set")
 	}
+	polkaSecret := os.Getenv("POLKA_SECRET")
+	if polkaSecret == "" {
+		log.Fatal("POLKA_SECRET must be set")
+	}
+
+	// open database connection
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
 	}
 	dbQueries := database.New(db)
 	apiCfg := apiConfig{
-		db:       dbQueries,
-		platform: platform,
-		secret:   secret,
+		db:          dbQueries,
+		platform:    platform,
+		secret:      secret,
+		polkaSecret: polkaSecret,
 	}
 
 	mux := http.NewServeMux()
