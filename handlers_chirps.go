@@ -70,14 +70,32 @@ func (cfg *apiConfig) handlerCreateChirp(w http.ResponseWriter, r *http.Request)
 }
 
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
+	// retrieve all chirps from database
 	dbChirps, err := cfg.db.GetChirps(r.Context())
 	if err != nil {
 		getChirpsErr := fmt.Sprintf("Error retrieving all chirps: %v", err)
 		helperResponseError(w, http.StatusInternalServerError, getChirpsErr)
 		return
 	}
+
+	// filter by author_id if present
+	userID := uuid.Nil
+	authID := r.URL.Query().Get("author_id")
+	if authID != "" {
+		userID, err = uuid.Parse(authID)
+		if err != nil {
+			parseErr := fmt.Sprintf("Error parsing UUID: %v", err)
+			helperResponseError(w, http.StatusInternalServerError, parseErr)
+			return
+		}
+	}
+
 	chirps := []Chirp{}
 	for _, dbChirp := range dbChirps {
+		// apply author_id filter
+		if authID != "" && dbChirp.UserID != userID {
+			continue
+		}
 		chirps = append(chirps, Chirp{
 			ID:        dbChirp.ID,
 			CreatedAt: dbChirp.CreatedAt,
